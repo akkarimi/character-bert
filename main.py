@@ -7,7 +7,7 @@ import logging
 import argparse
 import datetime
 from collections import Counter
-
+import json
 import torch
 from torch.nn import CrossEntropyLoss
 
@@ -54,13 +54,13 @@ def parse_args():
     parser.add_argument(
         "--train_batch_size",
         type=int,
-        default=1,
+        default=4,
         help="Batch size to use for training."
     )
     parser.add_argument(
         "--eval_batch_size",
         type=int,
-        default=1,
+        default=4,
         help="Batch size to use for evaluation."
     )
     parser.add_argument(
@@ -72,12 +72,12 @@ def parse_args():
     parser.add_argument(
         "--num_train_epochs",
         type=int,
-        default=3,
+        default=4,
         help="Number of training epochs."
     )
     parser.add_argument(
         "--validation_ratio",
-        default=0.5, type=float, help="Proportion of training set to use as a validation set.")
+        default=0.0005, type=float, help="Proportion of training set to use as a validation set.")
     parser.add_argument(
         "--learning_rate",
         default=5e-5, type=float, help="The initial learning rate for Adam.")
@@ -252,8 +252,7 @@ def main(args):
             pad_token_label_id=pad_token_label_id,
             max_seq_length=max_seq_length)
 
-    del data  # Not used anymore
-
+    # del data  # Not used anymore
     # --------------------------------- MODEL ---------------------------------
 
     # Initialize model
@@ -327,12 +326,23 @@ def main(args):
         model.to(args.device)
 
         # Compute predictions and metrics
-        results, _ = evaluate(
+        results, predictions_list = evaluate(
             args=args,
             eval_dataset=dataset["test"],
             model=model, labels=labels,
             pad_token_label_id=pad_token_label_id
         )
+        # Write predictions in a file
+        sentence_num = 1
+        predictions_dict = {}
+        with open(os.path.join(args.output_dir, 'predictions.json'), 'w') as pred:
+        	for item in predictions_list:
+        		predictions_dict[str(sentence_num)] = item
+        		sentence_num = sentence_num + 1
+        	json.dump(predictions_dict, pred)
+
+        with open(os.path.join(args.output_dir, 'data_test.json'), 'w') as data_test:
+            json.dump(data['test'], data_test)
 
         # Save metrics
         with open(os.path.join(args.output_dir, 'performance_on_test_set.txt'), 'w') as f:

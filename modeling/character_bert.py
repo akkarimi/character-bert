@@ -4,7 +4,7 @@
 """ Defines the main CharacterBERT PyTorch class. """
 import torch
 from torch import nn
-from transformers.modeling_bert import BertPreTrainedModel, BertEncoder, BertPooler
+from transformers.modeling_bert import BertPreTrainedModel, BertEncoder, BertPooler, BertLayer
 
 from modeling.character_cnn import CharacterCNN
 
@@ -45,6 +45,34 @@ class BertCharacterEmbeddings(nn.Module):
         return embeddings
 
 
+class PSUM(nn.Module):
+    def __init__(self, count, config):
+        super(PSUM, self).__init__()
+        self.count = count
+        self.pre_layers = torch.nn.ModuleList()
+        self.post_layer = BertLayer(config)
+        self.dropout = torch.nn.Dropout(config.hidden_dropout_prob)
+        for i in range(count):
+            self.pre_layers.append(BertLayer(config))
+
+    def forward(self, layers, attention_mask):
+        # sum_layers = torch.zeros_like(layers[0])
+        # for i in range(self.count):
+        #     layer = self.pre_layers[i](layers[-i-1], attention_mask)
+        #     layer = self.dropout(layer[0])
+        #     sum_layers = sum_layers + layer
+        # psum_output = self.post_layer(sum_layers, attention_mask)
+        # return psum_output
+
+        sum_layers = torch.zeros_like(layers[0])
+        sum_layers = layers[-1]
+        for i in range(self.count):
+            sum_layers = self.pre_layers[i](sum_layers, attention_mask)
+            sum_layers = sum_layers[0]
+            sum_layers = self.dropout(sum_layers)
+        psum_output = self.post_layer(sum_layers, attention_mask)
+        return psum_output
+
 class CharacterBertModel(BertPreTrainedModel):
     """ BertModel using char-cnn embeddings instead of wordpiece embeddings. """
 
@@ -54,8 +82,8 @@ class CharacterBertModel(BertPreTrainedModel):
 
         self.embeddings = BertCharacterEmbeddings(config)
         self.encoder = BertEncoder(config)
+        self.psum = PSUM(4, config)
         self.pooler = BertPooler(config)
-
         self.init_weights()
 
     def get_input_embeddings(self):
@@ -80,7 +108,6 @@ class CharacterBertModel(BertPreTrainedModel):
         encoder_attention_mask=None,
         **kwargs
     ):
-
         if input_ids is not None and inputs_embeds is not None:
             raise ValueError("You cannot specify both input_ids and inputs_embeds at the same time")
         elif input_ids is not None:
@@ -186,12 +213,12 @@ class CharacterBertModel(BertPreTrainedModel):
             encoder_hidden_states=encoder_hidden_states,
             encoder_attention_mask=encoder_extended_attention_mask,
         )
-        sequence_output = encoder_outputs[0]
-        pooled_output = self.pooler(sequence_output)
 
-        outputs = (sequence_output, pooled_output,) + encoder_outputs[
-            1:
-        ]  # add hidden_states and attentions if they are here
+        sequence_output = self.psum(encoder_outputs[1][-4:], extended_attention_mask)
+        pooled_output = self.pooler(sequence_output[0])
+
+        outputs = (sequence_output, pooled_output,) + encoder_outputs[1:]  # add hidden_states and attentions if they are here
+        # import ipdb; ipdb.set_trace()
         return outputs  # sequence_output, pooled_output, (hidden_states), (attentions)
 
 
