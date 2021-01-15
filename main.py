@@ -77,7 +77,7 @@ def parse_args():
     )
     parser.add_argument(
         "--validation_ratio",
-        default=0.0005, type=float, help="Proportion of training set to use as a validation set.")
+        default=0.2, type=float, help="Proportion of training set to use as a validation set.")
     parser.add_argument(
         "--learning_rate",
         default=5e-5, type=float, help="The initial learning rate for Adam.")
@@ -153,7 +153,7 @@ def main(args):
             do_lower_case=args.do_lower_case)
     except OSError:
         # For CharacterBert models use BertTokenizer.basic_tokenizer for tokenization
-        # and CharacterIndexer for indexing 
+        # and CharacterIndexer for indexing
         tokenizer = BertTokenizer.from_pretrained(
             os.path.join('pretrained-models', 'bert-base-uncased'),
             do_lower_case=args.do_lower_case)
