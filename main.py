@@ -158,7 +158,7 @@ def main(args):
             os.path.join('pretrained-models', 'bert-base-uncased'),
             do_lower_case=args.do_lower_case)
         tokenizer = tokenizer.basic_tokenizer
-        characters_indexer = CharacterIndexer()
+    characters_indexer = CharacterIndexer()
     logging.disable(logging.NOTSET)
 
     tokenization_function = tokenizer.tokenize
