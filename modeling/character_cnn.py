@@ -238,10 +238,10 @@ if __name__ == "__main__":
         '[CLS] hi , my name is Hicham [SEP]'.split(),
         '[CLS] hello Hicham [SEP]'.split()
     ]
-    print('Input sequences:', sentences)
+    #  print('Input sequences:', sentences)
 
     indexer = CharacterIndexer()
     inputs = indexer.as_padded_tensor(sentences)
-    print('Input shape:', inputs.shape)
+    #  print('Input shape:', inputs.shape)
 
     print('Output shape:', model.forward(inputs).shape)
