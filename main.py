@@ -6,7 +6,7 @@ import os
 import logging
 import argparse
 import datetime
-from collections import Counter
+from collections import Counter, defaultdict
 import json
 import torch
 from torch.nn import CrossEntropyLoss
@@ -28,6 +28,29 @@ from utils.training import train, evaluate
 
 from download import MODEL_TO_URL
 AVAILABLE_MODELS = list(MODEL_TO_URL.keys()) + ['bert-base-uncased']
+
+def analysis(data):
+    def count(data_):
+        words = defaultdict(int)
+        for dt in data_:
+            for seq in dt.token_sequence:
+                words[seq] += 1
+        return words
+
+    test_w = set(count(data['test']).keys())
+    train_w = set(count(data['train']).keys())
+    valid_w = set(count(data['validation']).keys())
+    test_n = test_w - train_w.union(valid_w)
+    logging.info(
+        '# words in test not found in training: {0} of {1} ({2})'.format(
+            len(test_n), len(test_w), len(test_n) / len(test_w)
+    ))
+    valid_n = valid_w - train_w
+    logging.info(
+        '# words not found in valid: {0} of {1} ({2})'.format(
+        len(valid_n), len(valid_w), len(valid_n) / len(valid_w)
+    ))
+
 
 def parse_args():
     """ Parse command line arguments and initialize experiment. """
@@ -179,6 +202,8 @@ def main(args):
     logging.info('Splitting training data into train / validation sets...')
     data['validation'] = data['train'][:int(args.validation_ratio * len(data['train']))]
     data['train'] = data['train'][int(args.validation_ratio * len(data['train'])):]
+
+    analysis(data)
     logging.info('New number of training sequences: %d', len(data['train']))
     logging.info('New number of validation sequences: %d', len(data['validation']))
 
