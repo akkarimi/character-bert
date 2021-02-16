@@ -5,10 +5,8 @@
 import torch
 from torch import nn
 from transformers.modeling_bert import BertPreTrainedModel, BertEncoder, BertPooler, BertLayer
-from modeling.character_cnn import CharacterCNN
 
-from modeling.layer_ae import PrimaryCaps, FlattenCaps, FCCaps
-import torch.nn.functional as F
+from modeling.character_cnn import CharacterCNN
 
 
 class BertCharacterEmbeddings(nn.Module):
@@ -46,30 +44,18 @@ class BertCharacterEmbeddings(nn.Module):
         embeddings = self.dropout(embeddings)
         return embeddings
 
-class CapsNet(nn.Module):
+
+class CNN2(nn.Module):
     def __init__(self, config):
-        super(CapsNet, self).__init__()
-        self.primary_caps = PrimaryCaps(num_capsules=config.dim_capsule, in_channels=1, 
-                                        out_channels=8, kernel_size=1, stride=1)
+        super(CNN2, self).__init__()
+        self.cnn = torch.nn.ModuleList()
+        for i in [1, 2, 3, 4, 5, 6, 7]:
+            self.cnn.append(torch.nn.Conv1d(1, 2, kernel_size=i, stride=1))
 
-        self.flatten = FlattenCaps()
-        self.linear = torch.nn.Linear(6144, config.num_compressed_capsule)
-        self.class_capsules = FCCaps(config, output_capsule_num=3,
-                                        input_capsule_num=config.num_compressed_capsule, 
-                                        in_channels=config.dim_capsule, 
-                                        out_channels=config.dim_capsule)
-        
-    # def compression(self, x, W):
-    #     x = torch.matmul(x.permute(0,2,1), W).permute(0,2,1)
-    #     return x
-        
     def forward(self, x):
-        x = self.primary_caps(x)
-        x = self.flatten(x)
-        x = self.linear(x.permute(0, 2, 1)).permute(0, 2, 1)
-        logits = self.class_capsules(x) # [16, 3]
-        return logits
-
+        import ipdb; ipdb.set_trace()
+        output = self.cnn(x)
+        return output
 
 class CharacterBertModel(BertPreTrainedModel):
     """ BertModel using char-cnn embeddings instead of wordpiece embeddings. """
@@ -80,7 +66,7 @@ class CharacterBertModel(BertPreTrainedModel):
 
         self.embeddings = BertCharacterEmbeddings(config)
         self.encoder = BertEncoder(config)
-        # self.capsNet = CapsNet(config)
+        self.cnn2 = CNN2(4, config)
         self.pooler = BertPooler(config)
         self.init_weights()
 
@@ -212,12 +198,12 @@ class CharacterBertModel(BertPreTrainedModel):
             encoder_attention_mask=encoder_extended_attention_mask,
         )
 
-        # logits = self.capsNet(encoder_outputs[1][-1])
-        sequence_output = encoder_outputs[0]
-        pooled_output = self.pooler(sequence_output)
+        sequence_output = self.psum(encoder_outputs[1][-4:], extended_attention_mask)
+        pooled_output = self.pooler(sequence_output[0])
 
         outputs = (sequence_output, pooled_output,) + encoder_outputs[1:]  # add hidden_states and attentions if they are here
-        return embedding_output, outputs  # sequence_output, pooled_output, (hidden_states), (attentions)
+        # import ipdb; ipdb.set_trace()
+        return outputs  # sequence_output, pooled_output, (hidden_states), (attentions)
 
 
 if __name__ == "__main__":

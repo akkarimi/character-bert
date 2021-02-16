@@ -21,8 +21,6 @@ import logging
 import math
 import os
 import sys
-from torch.autograd import Variable
-import torch.nn.functional as F
 
 import torch
 from torch import nn
@@ -31,9 +29,6 @@ from torch.nn import CrossEntropyLoss, MSELoss
 from .modeling_utils import PreTrainedModel, prune_linear_layer
 from .configuration_bert import BertConfig
 from .file_utils import add_start_docstrings
-
-from torch.autograd import grad
-
 
 logger = logging.getLogger(__name__)
 
@@ -1148,7 +1143,6 @@ class BertForTokenClassification(BertPreTrainedModel):
         super(BertForTokenClassification, self).__init__(config)
         self.num_labels = config.num_labels
         self.bert = BertModel(config)
-        self.encoder = self.bert.encoder
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.classifier = nn.Linear(config.hidden_size, config.num_labels)
 
@@ -1157,16 +1151,17 @@ class BertForTokenClassification(BertPreTrainedModel):
     def forward(self, input_ids=None, attention_mask=None, token_type_ids=None,
                 position_ids=None, head_mask=None, inputs_embeds=None, labels=None):
 
-        bert_emb, outputs = self.bert(input_ids,
+        outputs = self.bert(input_ids,
                             attention_mask=attention_mask,
                             token_type_ids=token_type_ids,
                             position_ids=position_ids,
                             head_mask=head_mask,
                             inputs_embeds=inputs_embeds)
 
-        sequence_output = outputs[0]
+        sequence_output = outputs[0][0]
         sequence_output = self.dropout(sequence_output)
         logits = self.classifier(sequence_output)
+
         outputs = (logits,) + outputs[2:]  # add hidden states and attention if they are here
         if labels is not None:
             loss_fct = CrossEntropyLoss()
@@ -1176,88 +1171,11 @@ class BertForTokenClassification(BertPreTrainedModel):
                 active_logits = logits.view(-1, self.num_labels)[active_loss]
                 active_labels = labels.view(-1)[active_loss]
                 loss = loss_fct(active_logits, active_labels)
-                if sequence_output.requires_grad: #if training mode
-                    perturbed_sentence = self.adv_attack(bert_emb, loss, epsilon=0.3)
-                    adv_loss = self.adversarial_loss(perturbed_sentence, attention_mask, token_type_ids, head_mask, labels, input_ids)
-                    return (loss + adv_loss,) + outputs
             else:
                 loss = loss_fct(logits.view(-1, self.num_labels), labels.view(-1))
             outputs = (loss,) + outputs
+
         return outputs  # (loss), scores, (hidden_states), (attentions)
-
-    def adv_attack(self, emb, loss, epsilon):
-        loss_grad = grad(loss, emb, retain_graph=True)[0]
-        loss_grad_norm = torch.sqrt(torch.sum(loss_grad**2, (1,2)))
-        perturbed_sentence = emb + epsilon * torch.sign(loss_grad)
-        return perturbed_sentence
-
-    def adversarial_loss(self, perturbed, attention_mask, token_type_ids, head_mask, labels, input_ids, encoder_attention_mask=None):
-
-        if input_ids is not None:
-            input_shape = input_ids.size()
-
-        device = input_ids.device
-
-        if attention_mask is None:
-            attention_mask = torch.ones(input_shape, device=device)
-        if encoder_attention_mask is None:
-            encoder_attention_mask = torch.ones(input_shape, device=device)
-        if token_type_ids is None:
-            token_type_ids = torch.zeros(input_shape, dtype=torch.long, device=device)
-
-        # We can provide a self-attention mask of dimensions [batch_size, from_seq_length, to_seq_length]
-        # ourselves in which case we just need to make it broadcastable to all heads.
-        if attention_mask.dim() == 3:
-            extended_attention_mask = attention_mask[:, None, :, :]
-
-        if attention_mask.dim() == 2:
-            if self.config.is_decoder:
-                batch_size, seq_length = input_shape
-                seq_ids = torch.arange(seq_length, device=device)
-                causal_mask = seq_ids[None, None, :].repeat(batch_size, seq_length, 1) <= seq_ids[None, :, None]
-                extended_attention_mask = causal_mask[:, None, :, :] * attention_mask[:, None, None, :]
-            else:
-                extended_attention_mask = attention_mask[:, None, None, :]
-
-        # Since attention_mask is 1.0 for positions we want to attend and 0.0 for
-        # masked positions, this operation will create a tensor which is 0.0 for
-        # positions we want to attend and -10000.0 for masked positions.
-        # Since we are adding it to the raw scores before the softmax, this is
-        # effectively the same as removing these entirely.
-        extended_attention_mask = extended_attention_mask.to(dtype=next(self.parameters()).dtype)  # fp16 compatibility
-        extended_attention_mask = (1.0 - extended_attention_mask) * -10000.0
-
-
-        if encoder_attention_mask.dim() == 3:
-            encoder_extended_attention_mask = encoder_attention_mask[:, None, :, :]
-        if encoder_attention_mask.dim() == 2:
-            encoder_extended_attention_mask = encoder_attention_mask[:, None, None, :]
-
-        encoder_extended_attention_mask = encoder_extended_attention_mask.to(dtype=next(self.parameters()).dtype)  # fp16 compatibility
-        encoder_extended_attention_mask = (1.0 - encoder_extended_attention_mask) * -10000.0
-
-
-        if head_mask is not None:
-            if head_mask.dim() == 1:
-                head_mask = head_mask.unsqueeze(0).unsqueeze(0).unsqueeze(-1).unsqueeze(-1)
-                head_mask = head_mask.expand(self.config.num_hidden_layers, -1, -1, -1, -1)
-            elif head_mask.dim() == 2:
-                head_mask = head_mask.unsqueeze(1).unsqueeze(-1).unsqueeze(-1)  # We can specify head_mask for each layer
-            head_mask = head_mask.to(dtype=next(self.parameters()).dtype)  # switch to fload if need + fp16 compatibility
-        else:
-            head_mask = [None] * self.config.num_hidden_layers
-
-        encoder_outputs = self.encoder(perturbed,
-                                       attention_mask=extended_attention_mask,
-                                       head_mask=head_mask,
-                                       encoder_attention_mask=encoder_extended_attention_mask)
-
-        encoded_layers_last = encoder_outputs[0]
-        encoded_layers_last = self.dropout(encoded_layers_last)
-        logits = self.classifier(encoded_layers_last)
-        loss_fct = torch.nn.CrossEntropyLoss()
-        adv_loss = loss_fct(logits.view(-1, self.num_labels), labels.view(-1))
-        return adv_loss
 
 
 @add_start_docstrings("""Bert Model with a span classification head on top for extractive question-answering tasks like SQuAD (a linear layers on top of

@@ -29,7 +29,6 @@ from utils.training import train, evaluate
 from download import MODEL_TO_URL
 AVAILABLE_MODELS = list(MODEL_TO_URL.keys()) + ['bert-base-uncased']
 
-
 def parse_args():
     """ Parse command line arguments and initialize experiment. """
     parser = argparse.ArgumentParser()
@@ -73,15 +72,15 @@ def parse_args():
     parser.add_argument(
         "--num_train_epochs",
         type=int,
-        default=6,
+        default=4,
         help="Number of training epochs."
     )
     parser.add_argument(
         "--validation_ratio",
-        default=0.01, type=float, help="Proportion of training set to use as a validation set.")
+        default=0.0005, type=float, help="Proportion of training set to use as a validation set.")
     parser.add_argument(
         "--learning_rate",
-        default=3e-5, type=float, help="The initial learning rate for Adam.")
+        default=5e-5, type=float, help="The initial learning rate for Adam.")
     parser.add_argument(
         "--weight_decay",
         default=0.1, type=float, help="Weight decay if we apply some.")
@@ -107,7 +106,7 @@ def parse_args():
     parser.add_argument(
         "--seed",
         type=int,
-        default=13,
+        default=42,
         help="Random seed."
     )
 
@@ -125,7 +124,7 @@ def parse_args():
     logging.basicConfig(
         format="%(asctime)s - %(levelname)s - %(filename)s -   %(message)s",
         datefmt="%d/%m/%Y %H:%M:%S",
-        level=logging.CRITICAL)
+        level=logging.INFO)
 
     # Check for GPUs
     if torch.cuda.is_available():

@@ -95,8 +95,7 @@ def train(args, dataset, model, tokenizer, labels, pad_token_label_id):
 
             outputs = model(**inputs)
             loss = outputs[0]  # model outputs are always tuple in pytorch-transformers (see doc)
-            if step % 100 == 0: 
-                print('training loss:' , loss)
+
             if args.gradient_accumulation_steps > 1:
                 loss = loss / args.gradient_accumulation_steps
 

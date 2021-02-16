@@ -18,15 +18,15 @@ def separate_spans(df):
 		span = []
 		for j, sp in enumerate(df['spans'][i]):
 			if j == 0:
-				span.append(sp)
-			elif j == len(df['spans'][i])-1:
-				span.append(sp)
+				span.append(df['spans'][i][j])
+			if j == len(df['spans'][i])-1:
+				span.append(df['spans'][i][j])
 				spans.append(span)
-			else:
+			if j < len(df['spans'][i])-1 and j > 0:
 				if df['spans'][i][j+1] - df['spans'][i][j] == 1:
-					span.append(sp)
+					span.append(df['spans'][i][j])
 				else:
-					span.append(sp)
+					span.append(df['spans'][i][j])
 					spans.append(span)
 					span = []
 		sep_spans[str(i)] = spans
@@ -46,10 +46,7 @@ def extract_toxic_spans(sep_spans, df):
 			for tox_word in tox_words:
 				tox_word = tTokenizer.tokenize(tox_word)
 				if word in tox_word:
-					if word == tox_word[0]:
-						tox_labels[word] = 'B-LOC'
-					else:
-						tox_labels[word] = 'I-LOC'
+					tox_labels[word] = 'B-LOC'
 				else:
 					tox_labels[word] = 'O'
 		
