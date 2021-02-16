@@ -9,7 +9,7 @@ from modeling.character_cnn import CharacterCNN
 
 from modeling.layer_ae import PrimaryCaps, FlattenCaps, FCCaps
 import torch.nn.functional as F
-from torchcrf import CRF
+from TorchCRF import CRF
 
 class BertCharacterEmbeddings(nn.Module):
     """ Construct the embeddings from char-cnn, position and token_type embeddings. """
