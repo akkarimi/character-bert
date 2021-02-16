@@ -28,8 +28,7 @@ from utils.training import train, evaluate
 
 from download import MODEL_TO_URL
 AVAILABLE_MODELS = list(MODEL_TO_URL.keys()) + ['bert-base-uncased']
-from torch.utils.tensorboard import SummaryWriter
-writer = SummaryWriter()
+
 
 def parse_args():
     """ Parse command line arguments and initialize experiment. """
@@ -74,15 +73,15 @@ def parse_args():
     parser.add_argument(
         "--num_train_epochs",
         type=int,
-        default=4,
+        default=5,
         help="Number of training epochs."
     )
     parser.add_argument(
         "--validation_ratio",
-        default=0.1, type=float, help="Proportion of training set to use as a validation set.")
+        default=0.05, type=float, help="Proportion of training set to use as a validation set.")
     parser.add_argument(
         "--learning_rate",
-        default=5e-5, type=float, help="The initial learning rate for Adam.")
+        default=3e-5, type=float, help="The initial learning rate for Adam.")
     parser.add_argument(
         "--weight_decay",
         default=0.1, type=float, help="Weight decay if we apply some.")
@@ -108,7 +107,7 @@ def parse_args():
     parser.add_argument(
         "--seed",
         type=int,
-        default=42,
+        default=13,
         help="Random seed."
     )
 
@@ -299,12 +298,11 @@ def main(args):
             model=model,
             tokenizer=tokenizer,
             labels=labels,
-            pad_token_label_id=pad_token_label_id,
-            writer=writer
+            pad_token_label_id=pad_token_label_id
         )
         logging.info("global_step = %s, average training loss = %s", global_step, train_loss)
         logging.info("Best performance: Epoch=%d, Value=%s", best_val_epoch, best_val_metric)
-    writer.flush()
+
     # Evaluation on test data
     if args.do_predict:
 

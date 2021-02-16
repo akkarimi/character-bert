@@ -83,14 +83,14 @@ class BertConfig(PretrainedConfig):
                  num_attention_heads=12,
                  intermediate_size=3072,
                  hidden_act="gelu",
-                 hidden_dropout_prob=0.4,
+                 hidden_dropout_prob=0.1,
                  attention_probs_dropout_prob=0.1,
                  max_position_embeddings=512,
                  type_vocab_size=2,
                  initializer_range=0.02,
                  layer_norm_eps=1e-12,
                  max_seq_length = 512,
-                 num_compressed_capsule = 256,
+                 num_compressed_capsule = 128,
                  dim_capsule = 8,
                  **kwargs):
         super(BertConfig, self).__init__(**kwargs)

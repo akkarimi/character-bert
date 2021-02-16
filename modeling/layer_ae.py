@@ -23,7 +23,6 @@ class PrimaryCaps(nn.Module):
         super(PrimaryCaps, self).__init__()
         self.capsules = nn.Conv1d(in_channels, out_channels * num_capsules, kernel_size, stride)
         torch.nn.init.xavier_normal_(self.capsules.weight)
-        # torch.nn.init.kaiming_normal_(self.capsules.weight, mode='fan_in', nonlinearity='relu')
         self.out_channels = out_channels
         self.num_capsules = num_capsules
 
@@ -63,7 +62,7 @@ class FCCaps(nn.Module):
         ci = F.softmax(self.bij, dim=1) # [512, 3]
         sj = (ci.unsqueeze(-1) * u_hat).sum(dim=1) # [16, 3, 8]
         v = squash_v1(sj, axis=-1) # [16, 3, 8]
-        num_iterations = 7
+        num_iterations = 10
         bij = self.bij.expand((batch_size, self.input_capsule_num, self.output_capsule_num)) # [16, 512, 3]
         for i in range(num_iterations):
             v = v.unsqueeze(1) # [16, 1, 3, 8]

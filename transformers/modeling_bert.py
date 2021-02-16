@@ -722,7 +722,7 @@ class BertModel(BertPreTrainedModel):
         pooled_output = self.pooler(sequence_output)
 
         outputs = (sequence_output, pooled_output,) + encoder_outputs[1:]  # add hidden_states and attentions if they are here
-        return outputs  # sequence_output, pooled_output, (hidden_states), (attentions)
+        return outputs, extended_attention_mask  # sequence_output, pooled_output, (hidden_states), (attentions)
 
 
 @add_start_docstrings("""Bert Model with two heads on top as done during the pre-training:
@@ -1107,28 +1107,38 @@ class BertForMultipleChoice(BertPreTrainedModel):
 
         return outputs  # (loss), reshaped_logits, (hidden_states), (attentions)
 
+# from torchcrf import CRF
 
-class MarginLoss(nn.Module):
-    def __init__(self, m_pos, m_neg, lambda_):
-        super(MarginLoss, self).__init__()
-        self.m_pos = m_pos
-        self.m_neg = m_neg
-        self.lambda_ = lambda_
+class PSUM(nn.Module):
+    def __init__(self, count, config, num_labels):
+        super(PSUM, self).__init__()
+        self.count = count
+        self.num_labels = num_labels
+        self.pre_layers = torch.nn.ModuleList()
+        self.classifier = torch.nn.Linear(config.hidden_size, num_labels)
+        self.dropout = torch.nn.Dropout(config.hidden_dropout_prob)
+        # self.ceweight = torch.Tensor([0.1, 0.9, 0.1])
+        self.loss_fct = torch.nn.CrossEntropyLoss(ignore_index=-100)
+        for i in range(count):
+            self.pre_layers.append(BertLayer(config))
 
-    def forward(self, lengths, targets, attention_mask, size_average=False):
-        # import ipdb; ipdb.set_trace()
-        active_loss = targets.view(-1) >= 0
-        active_lengths = lengths.view(-1, 3)[active_loss]
-        active_targets = targets.view(-1)[active_loss]
-        t = torch.zeros(active_lengths.size()).long()
-        if active_targets.is_cuda:
-            t = t.cuda()
-        t = t.scatter_(1, active_targets.data.view(-1, 1), 1)
-        targets = Variable(t)
-        lengths = active_lengths
-        losses = targets.float() * F.relu(self.m_pos - lengths).pow(2) + \
-                 self.lambda_ * (1. - targets.float()) * F.relu(lengths - self.m_neg).pow(2)
-        return losses.mean() if size_average else losses.sum()
+    def forward(self, layers, mask, labels):
+        losses = []
+        logitses = []
+        for i in range(self.count):
+            layer = self.pre_layers[i](layers[-i-1], mask)[0]
+            layer = self.dropout(layer)
+            logits = self.classifier(layer)
+            if labels is not None:
+                loss = self.loss_fct(logits.view(-1, self.num_labels), labels.view(-1))
+                losses.append(loss)
+            logitses.append(logits)
+        if labels is not None:
+            total_loss = torch.sum(torch.stack(losses), dim=0)
+        else:
+            total_loss = torch.Tensor(0)
+        avg_logits = torch.sum(torch.stack(logitses), dim=0)/self.count
+        return total_loss, avg_logits
 
 
 @add_start_docstrings("""Bert Model with a token classification head on top (a linear layer on top of
@@ -1168,7 +1178,7 @@ class BertForTokenClassification(BertPreTrainedModel):
         super(BertForTokenClassification, self).__init__(config)
         self.num_labels = config.num_labels
         self.bert = BertModel(config)
-        self.loss_fn = MarginLoss(0.9, 0.1, 0.5)
+        self.psum = PSUM(4, config, config.num_labels)
         # self.dropout = nn.Dropout(config.hidden_dropout_prob)
         # self.classifier = nn.Linear(config.hidden_size, config.num_labels)
 
@@ -1177,21 +1187,22 @@ class BertForTokenClassification(BertPreTrainedModel):
     def forward(self, input_ids=None, attention_mask=None, token_type_ids=None,
                 position_ids=None, head_mask=None, inputs_embeds=None, labels=None):
 
-        outputs = self.bert(input_ids,
+        outputs, mask = self.bert(input_ids,
                             attention_mask=attention_mask,
                             token_type_ids=token_type_ids,
                             position_ids=position_ids,
                             head_mask=head_mask,
                             inputs_embeds=inputs_embeds)
 
-
-        logits = outputs.view(-1, attention_mask.size(1), 3)
+        
+        layers = outputs[1][-4:]
+        loss, logits = self.psum(layers, mask, labels)
         if labels is not None:
-            # loss_fn = CrossEntropyLoss(ignore_index=-100)
-            loss = self.loss_fn(logits.view(-1, self.num_labels), labels.view(-1), attention_mask)
             return loss, logits
         else:
-            return 0, logits
+            return logits, loss
+
+
         # sequence_output = outputs[0]
 
         # sequence_output = self.dropout(sequence_output)
