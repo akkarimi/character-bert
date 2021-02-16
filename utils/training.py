@@ -77,11 +77,6 @@ def train(args, dataset, model, tokenizer, labels, pad_token_label_id):
 
     set_seed(seed_value=args.seed)  # Added here for reproductibility
     for num_epoch in train_iterator:
-
-        if num_epoch != 0:
-            for param in model.bert.parameters():
-                param.requires_grad = False
-
         epoch_iterator = tqdm.tqdm(train_dataloader, desc="Iteration")
         for step, batch in enumerate(epoch_iterator):
 
@@ -100,8 +95,8 @@ def train(args, dataset, model, tokenizer, labels, pad_token_label_id):
 
             outputs = model(**inputs)
             loss = outputs[0]  # model outputs are always tuple in pytorch-transformers (see doc)
-            if step % 500 == 0:
-                print('Training Loss: ', loss.data)
+            if step % 100 == 0: 
+                print('training loss:' , loss)
             if args.gradient_accumulation_steps > 1:
                 loss = loss / args.gradient_accumulation_steps
 

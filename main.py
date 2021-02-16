@@ -73,12 +73,12 @@ def parse_args():
     parser.add_argument(
         "--num_train_epochs",
         type=int,
-        default=5,
+        default=6,
         help="Number of training epochs."
     )
     parser.add_argument(
         "--validation_ratio",
-        default=0.05, type=float, help="Proportion of training set to use as a validation set.")
+        default=0.01, type=float, help="Proportion of training set to use as a validation set.")
     parser.add_argument(
         "--learning_rate",
         default=3e-5, type=float, help="The initial learning rate for Adam.")
