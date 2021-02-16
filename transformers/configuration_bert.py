@@ -83,12 +83,15 @@ class BertConfig(PretrainedConfig):
                  num_attention_heads=12,
                  intermediate_size=3072,
                  hidden_act="gelu",
-                 hidden_dropout_prob=0.1,
+                 hidden_dropout_prob=0.4,
                  attention_probs_dropout_prob=0.1,
                  max_position_embeddings=512,
                  type_vocab_size=2,
                  initializer_range=0.02,
                  layer_norm_eps=1e-12,
+                 max_seq_length = 512,
+                 num_compressed_capsule = 256,
+                 dim_capsule = 8,
                  **kwargs):
         super(BertConfig, self).__init__(**kwargs)
         if isinstance(vocab_size_or_config_json_file, str) or (sys.version_info[0] == 2
@@ -110,6 +113,9 @@ class BertConfig(PretrainedConfig):
             self.type_vocab_size = type_vocab_size
             self.initializer_range = initializer_range
             self.layer_norm_eps = layer_norm_eps
+            self.max_seq_length = max_seq_length
+            self.num_compressed_capsule = num_compressed_capsule
+            self.dim_capsule = dim_capsule
         else:
             raise ValueError("First argument must be either a vocabulary size (int)"
                              " or the path to a pretrained model config file (str)")

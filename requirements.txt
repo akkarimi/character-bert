@@ -14,10 +14,10 @@ blis=0.4.1=pypi_0
 boto3=1.14.6=pypi_0
 botocore=1.17.6=pypi_0
 brotlipy=0.7.0=py37h27cfd23_1003
-ca-certificates=2020.12.5=ha878542_0
+ca-certificates=2020.12.8=h06a4308_0
 capsule-layer=0.5.0=pypi_0
 catalogue=1.0.0=pypi_0
-certifi=2020.12.5=py37h89c1867_0
+certifi=2020.12.5=py37h06a4308_0
 cffi=1.14.4=py37h261ae71_0
 chardet=3.0.4=pypi_0
 click=7.1.2=pyh9f0ad1d_0

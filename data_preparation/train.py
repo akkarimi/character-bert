@@ -18,19 +18,32 @@ def separate_spans(df):
 		span = []
 		for j, sp in enumerate(df['spans'][i]):
 			if j == 0:
-				span.append(df['spans'][i][j])
-			if j == len(df['spans'][i])-1:
-				span.append(df['spans'][i][j])
+				span.append(sp)
+			elif j == len(df['spans'][i])-1:
+				span.append(sp)
 				spans.append(span)
-			if j < len(df['spans'][i])-1 and j > 0:
+			else:
 				if df['spans'][i][j+1] - df['spans'][i][j] == 1:
-					span.append(df['spans'][i][j])
+					span.append(sp)
 				else:
-					span.append(df['spans'][i][j])
+					span.append(sp)
 					spans.append(span)
 					span = []
 		sep_spans[str(i)] = spans
 	return sep_spans
+
+
+def return_label(word, tox_words):
+	for tox_word in tox_words:
+		tox_word = tTokenizer.tokenize(tox_word)
+		if word in tox_word:
+			if word == tox_word[0]:
+				return 'B-LOC'
+			else:
+				return 'I-LOC'
+		else:
+			continue
+	return 'O'
 
 def extract_toxic_spans(sep_spans, df):
 	txtfile = open('train.txt', 'w')
@@ -43,13 +56,8 @@ def extract_toxic_spans(sep_spans, df):
 
 		tox_labels = {}
 		for word in sentence_words:
-			for tox_word in tox_words:
-				tox_word = tTokenizer.tokenize(tox_word)
-				if word in tox_word:
-					tox_labels[word] = 'B-LOC'
-				else:
-					tox_labels[word] = 'O'
-		
+			tox_labels[word] = return_label(word, tox_words)
+
 		for key, value in tox_labels.items():
 			line = key.split(' ')
 			if len(line) >= 2:
@@ -67,7 +75,7 @@ def check_the_files():
 	data = ['train', 'test']
 	for datum in data:
 		txtfile = open(datum + '.txt', 'r')
-		clean = open('../data/sequence_labelling/' + datum + '.txt', 'w')
+		clean = open(datum + '_ready.txt', 'w')
 		for line in txtfile:
 			if 'O' not in line and 'B-LOC' not in line and 'I-LOC' not in line and '.' in line:
 				clean.write(line[:-1] + ' ' + 'O\n')

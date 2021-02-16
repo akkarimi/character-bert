@@ -21,6 +21,8 @@ import logging
 import math
 import os
 import sys
+from torch.autograd import Variable
+import torch.nn.functional as F
 
 import torch
 from torch import nn
@@ -1106,6 +1108,29 @@ class BertForMultipleChoice(BertPreTrainedModel):
         return outputs  # (loss), reshaped_logits, (hidden_states), (attentions)
 
 
+class MarginLoss(nn.Module):
+    def __init__(self, m_pos, m_neg, lambda_):
+        super(MarginLoss, self).__init__()
+        self.m_pos = m_pos
+        self.m_neg = m_neg
+        self.lambda_ = lambda_
+
+    def forward(self, lengths, targets, attention_mask, size_average=False):
+        # import ipdb; ipdb.set_trace()
+        active_loss = targets.view(-1) >= 0
+        active_lengths = lengths.view(-1, 3)[active_loss]
+        active_targets = targets.view(-1)[active_loss]
+        t = torch.zeros(active_lengths.size()).long()
+        if active_targets.is_cuda:
+            t = t.cuda()
+        t = t.scatter_(1, active_targets.data.view(-1, 1), 1)
+        targets = Variable(t)
+        lengths = active_lengths
+        losses = targets.float() * F.relu(self.m_pos - lengths).pow(2) + \
+                 self.lambda_ * (1. - targets.float()) * F.relu(lengths - self.m_neg).pow(2)
+        return losses.mean() if size_average else losses.sum()
+
+
 @add_start_docstrings("""Bert Model with a token classification head on top (a linear layer on top of
                       the hidden-states output) e.g. for Named-Entity-Recognition (NER) tasks. """,
                       BERT_START_DOCSTRING,
@@ -1143,8 +1168,9 @@ class BertForTokenClassification(BertPreTrainedModel):
         super(BertForTokenClassification, self).__init__(config)
         self.num_labels = config.num_labels
         self.bert = BertModel(config)
-        self.dropout = nn.Dropout(config.hidden_dropout_prob)
-        self.classifier = nn.Linear(config.hidden_size, config.num_labels)
+        self.loss_fn = MarginLoss(0.9, 0.1, 0.5)
+        # self.dropout = nn.Dropout(config.hidden_dropout_prob)
+        # self.classifier = nn.Linear(config.hidden_size, config.num_labels)
 
         self.init_weights()
 
@@ -1158,24 +1184,32 @@ class BertForTokenClassification(BertPreTrainedModel):
                             head_mask=head_mask,
                             inputs_embeds=inputs_embeds)
 
-        sequence_output = outputs[0][0]
-        sequence_output = self.dropout(sequence_output)
-        logits = self.classifier(sequence_output)
 
-        outputs = (logits,) + outputs[2:]  # add hidden states and attention if they are here
+        logits = outputs.view(-1, attention_mask.size(1), 3)
         if labels is not None:
-            loss_fct = CrossEntropyLoss()
-            # Only keep active parts of the loss
-            if attention_mask is not None:
-                active_loss = attention_mask.view(-1) == 1
-                active_logits = logits.view(-1, self.num_labels)[active_loss]
-                active_labels = labels.view(-1)[active_loss]
-                loss = loss_fct(active_logits, active_labels)
-            else:
-                loss = loss_fct(logits.view(-1, self.num_labels), labels.view(-1))
-            outputs = (loss,) + outputs
+            # loss_fn = CrossEntropyLoss(ignore_index=-100)
+            loss = self.loss_fn(logits.view(-1, self.num_labels), labels.view(-1), attention_mask)
+            return loss, logits
+        else:
+            return 0, logits
+        # sequence_output = outputs[0]
 
-        return outputs  # (loss), scores, (hidden_states), (attentions)
+        # sequence_output = self.dropout(sequence_output)
+        # logits = self.classifier(sequence_output)
+
+        # outputs = (logits,) + outputs[2:]  # add hidden states and attention if they are here
+        # if labels is not None:
+        #     loss_fct = CrossEntropyLoss()
+        #     # Only keep active parts of the loss
+        #     if attention_mask is not None:
+        #         active_loss = attention_mask.view(-1) == 1
+        #         active_logits = logits.view(-1, self.num_labels)[active_loss]
+        #         active_labels = labels.view(-1)[active_loss]
+        #         loss = loss_fct(active_logits, active_labels)
+        #     else:
+        #         loss = loss_fct(logits.view(-1, self.num_labels), labels.view(-1))
+        #     outputs = (loss,) + outputs
+        # return outputs  # (loss), scores, (hidden_states), (attentions)
 
 
 @add_start_docstrings("""Bert Model with a span classification head on top for extractive question-answering tasks like SQuAD (a linear layers on top of
